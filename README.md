@@ -1,24 +1,46 @@
-# Chrome 匯入插件步驟教學
+﻿# ChatGPT 提示詞助手
 
-## 一、準備插件檔案
-1. 將插件資料夾解壓到本地，例如命名為 my_extension，裡面要包含 manifest.json、background.js 等必要檔案  
-2. 或下載 .crx 檔案，並放在易於找到的資料夾  
+React + Vite 版本的 Chrome 擴充功能，可儲存常用提示詞、設定觸發符號，並在 ChatGPT (https://chatgpt.com) 的輸入框中輸入 `!!` 等自訂符號快速插入片語。
 
-## 二、開啟擴充功能管理頁面
-1. 在 Chrome 的地址列輸入 chrome://extensions 並按 Enter  
-2. 點擊右上角的「開發者模式」開關，把它打開  
+## 功能重點
+- ✅ React 建立的提示詞管理介面，支援新增、編輯、刪除與即時同步
+- ✅ 匯入 / 匯出 JSON，方便共享與備份
+- ✅ 自訂觸發符號 (預設 `!!`)，在 ChatGPT 中按 Tab / Enter 選取
+- ✅ content script 於 ChatGPT 內顯示建議清單，支援鍵盤導覽
 
-## 三、載入未打包的擴充功能
-1. 按一下「載入已解壓縮的擴充功能」按鈕  
-2. 選擇剛剛準備好的 my_extension 資料夾後，按「選擇資料夾」  
-3. 成功載入後，你就能在擴充功能列表看到該插件，並確保它已啟用  
+## 環境需求
+- Node.js 18+ / npm 10+
+- Chrome 109+ (Manifest V3)
 
-## 四、注意事項
-- 若要測試新版內容，可在擴充功能列表中按「重新載入」按鈕，快速套用更新  
-- 避免匯入來源不明的插件，以守護個人資料與系統安全  
-- Chrome 更新後，已載入的擴充功能通常會保留；若意外消失，只要重複上述步驟即可
+## 開發流程
+```bash
+npm install
+npm run dev          # 啟動 React 開發伺服器（options UI）
+npm run build        # 產出 build/，含 background/content/options
+```
 
-## 五`、使用方法
-- 使用自定義的符號觸發快捷方式，如"!!"或"@@"
-- 可自行新增prompt
-- 一鍵匯出和匯入
+`npm run dev` 只渲染 React 介面（無法呼叫 Chrome API），請在瀏覽器中載入 `build/` 目錄進行完整測試。
+
+## 安裝 / 偵錯
+1. 執行 `npm run build`，確認 `build/` 內含 `manifest.json`、`background.js`、`content.js`、`index.html`、`icons/`
+2. Chrome 前往 `chrome://extensions` → 開啟「開發人員模式」
+3. 「載入未封裝項目」→ 選擇 `build/`
+4. 點擊工具列圖示將會開啟 React options 介面；在 https://chatgpt.com 文字輸入框輸入觸發符號即可叫出列表
+
+## 專案結構
+```
+├── public/             # manifest 及 icons（會被複製到 build/）
+├── src/
+│   ├── App.tsx         # React options UI
+│   ├── content.ts      # ChatGPT 內容腳本（提示詞插入）
+│   ├── background.ts   # 觸發 options 頁面的 service worker
+│   └── *.css           # UI 與全域樣式
+├── vite.config.ts      # 自訂輸出 entry（main/background/content）
+└── package.json
+```
+
+## 相關指令
+- `npm run lint`：使用 ESLint 驗證 TypeScript / React 程式碼
+- `npm run preview`：預覽 build 結果
+
+若需調整匹配網址或權限，請修改 `public/manifest.json` 並重新 build。
