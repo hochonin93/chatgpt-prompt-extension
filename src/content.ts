@@ -41,6 +41,9 @@ const suggestionStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   #${SUGGESTION_BOX_ID} .suggestion-item:hover,
