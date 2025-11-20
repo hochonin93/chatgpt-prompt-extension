@@ -3,7 +3,9 @@
   "name": "ChatGPT 提示詞助手",
   "description": "儲存常用提示詞、匯入匯出，並在 ChatGPT 內用觸發符號快速插入。",
   "version": "1.0.0",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "options_ui": {
     "page": "index.html",
     "open_in_tab": true
@@ -26,8 +28,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
     }
   ]
 }
