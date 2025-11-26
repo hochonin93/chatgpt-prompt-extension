@@ -121,6 +121,15 @@ function App() {
   }
 
   const handleDeletePrompt = async (index: number) => {
+    const promptText = prompts[index]?.text || ''
+    const confirmMessage = promptText.length > 50
+      ? `確定要刪除此提示詞嗎?\n\n"${promptText.substring(0, 50)}..."`
+      : `確定要刪除此提示詞嗎?\n\n"${promptText}"`
+
+    if (!window.confirm(confirmMessage)) {
+      return
+    }
+
     const nextPrompts = prompts.filter((_, itemIndex) => itemIndex !== index)
     await persistPrompts(nextPrompts)
     setPrompts(nextPrompts)
