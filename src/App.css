@@ -205,11 +205,8 @@ button:disabled {
 }
 
 footer {
-  display: flex;
-  flex-wrap: wrap;
   gap: 12px;
   color: #475569;
-  align-items: center;
 }
 
 .status-chip {

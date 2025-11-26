@@ -1,7 +1,7 @@
 {
   "name": "chatgpt-prompt-extension",
   "private": true,
-  "version": "1.0.0",
+  "version": "7",
   "description": "React-based Chrome extension that injects saved prompts into ChatGPT with a custom trigger.",
   "type": "module",
   "scripts": {
