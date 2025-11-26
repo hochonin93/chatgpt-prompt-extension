@@ -203,7 +203,8 @@ function showSuggestions() {
     item.dataset.index = index.toString();
     item.textContent = prompt;
 
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
       insertPrompt(prompt);
       hideSuggestions();
     });
@@ -379,8 +380,12 @@ window.addEventListener('resize', () => {
 });
 
 // Handle scroll to hide/reposition
-window.addEventListener('scroll', () => {
+window.addEventListener('scroll', (event) => {
   if (suggestionBox && !suggestionBox.classList.contains('hidden')) {
+    // Don't hide if the scroll is happening inside the suggestion box itself
+    if (event.target === suggestionBox || suggestionBox.contains(event.target as Node)) {
+      return;
+    }
     hideSuggestions();
   }
 }, true); // Capture phase to detect scrolling in any container

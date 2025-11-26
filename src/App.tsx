@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd'
 import './App.css'
 
 const DEFAULT_TRIGGER = '!!'
@@ -7,6 +8,11 @@ const STORAGE_KEYS: (keyof StorageData)[] = ['prompts', 'triggerSymbol']
 type StorageData = {
   prompts?: string[]
   triggerSymbol?: string
+}
+
+type PromptItem = {
+  id: string
+  text: string
 }
 
 const hasChromeRuntime = typeof chrome !== 'undefined' && !!chrome.storage?.sync
@@ -18,7 +24,7 @@ const fallbackPrompts = [
 ]
 
 function App() {
-  const [prompts, setPrompts] = useState<string[]>([])
+  const [prompts, setPrompts] = useState<PromptItem[]>([])
   const [triggerSymbol, setTriggerSymbol] = useState(DEFAULT_TRIGGER)
   const [pendingTrigger, setPendingTrigger] = useState(DEFAULT_TRIGGER)
   const [newPrompt, setNewPrompt] = useState('')
@@ -30,7 +36,7 @@ function App() {
 
   useEffect(() => {
     if (!hasChromeRuntime) {
-      setPrompts(fallbackPrompts)
+      setPrompts(fallbackPrompts.map((text) => ({ id: crypto.randomUUID(), text })))
       setPendingTrigger(DEFAULT_TRIGGER)
       setTriggerSymbol(DEFAULT_TRIGGER)
       setLoading(false)
@@ -45,7 +51,8 @@ function App() {
     const handler = (changes: { [key in keyof StorageData]?: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName !== 'sync') return
       if (changes.prompts) {
-        setPrompts(Array.isArray(changes.prompts.newValue) ? changes.prompts.newValue : [])
+        const newPrompts = Array.isArray(changes.prompts.newValue) ? changes.prompts.newValue : []
+        setPrompts(newPrompts.map((text: string) => ({ id: crypto.randomUUID(), text })))
       }
       if (changes.triggerSymbol) {
         const nextValue = changes.triggerSymbol.newValue
@@ -76,20 +83,21 @@ function App() {
           ? result.triggerSymbol
           : DEFAULT_TRIGGER
 
-      setPrompts(savedPrompts)
+      setPrompts(savedPrompts.map((text) => ({ id: crypto.randomUUID(), text })))
       setTriggerSymbol(savedTrigger)
       setPendingTrigger(savedTrigger)
       setLoading(false)
     })
   }
 
-  const persistPrompts = (nextPrompts: string[]) => {
+  const persistPrompts = (nextPrompts: PromptItem[]) => {
+    const rawPrompts = nextPrompts.map((p) => p.text)
     if (!hasChromeRuntime) {
       setPrompts(nextPrompts)
       return Promise.resolve()
     }
     return new Promise<void>((resolve) => {
-      chrome.storage.sync.set({ prompts: nextPrompts }, () => resolve())
+      chrome.storage.sync.set({ prompts: rawPrompts }, () => resolve())
     })
   }
 
@@ -105,7 +113,7 @@ function App() {
     event?.preventDefault()
     const trimmed = newPrompt.trim()
     if (!trimmed) return
-    const nextPrompts = [...prompts, trimmed]
+    const nextPrompts = [...prompts, { id: crypto.randomUUID(), text: trimmed }]
     await persistPrompts(nextPrompts)
     setPrompts(nextPrompts)
     setNewPrompt('')
@@ -137,7 +145,9 @@ function App() {
     if (editingIndex === null) return
     const trimmed = editingValue.trim()
     if (!trimmed) return
-    const nextPrompts = prompts.map((prompt, index) => (index === editingIndex ? trimmed : prompt))
+    const nextPrompts = prompts.map((prompt, index) =>
+      index === editingIndex ? { ...prompt, text: trimmed } : prompt
+    )
     await persistPrompts(nextPrompts)
     setPrompts(nextPrompts)
     setEditingIndex(null)
@@ -154,7 +164,7 @@ function App() {
   }
 
   const handleExportPrompts = () => {
-    const exported = JSON.stringify(prompts, null, 2)
+    const exported = JSON.stringify(prompts.map((p) => p.text), null, 2)
     const blob = new Blob([exported], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -185,9 +195,18 @@ function App() {
           .filter((item) => typeof item === 'string')
           .map((item) => item.trim())
           .filter((item) => item.length > 0)
-        const deduped = Array.from(new Set([...prompts, ...cleaned]))
-        await persistPrompts(deduped)
-        setPrompts(deduped)
+
+        const currentTexts = prompts.map((p) => p.text)
+        const newTexts = cleaned.filter((text: string) => !currentTexts.includes(text))
+
+        if (newTexts.length === 0) {
+          setStatusMessage('沒有新的提示詞可匯入')
+          return
+        }
+
+        const nextPrompts = [...prompts, ...newTexts.map((text: string) => ({ id: crypto.randomUUID(), text }))]
+        await persistPrompts(nextPrompts)
+        setPrompts(nextPrompts)
         setStatusMessage('提示詞已匯入')
       } catch (error) {
         console.error(error)
@@ -198,6 +217,22 @@ function App() {
     }
 
     reader.readAsText(file)
+  }
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return
+
+    const sourceIndex = result.source.index
+    const destinationIndex = result.destination.index
+
+    if (sourceIndex === destinationIndex) return
+
+    const nextPrompts = Array.from(prompts)
+    const [reorderedItem] = nextPrompts.splice(sourceIndex, 1)
+    nextPrompts.splice(destinationIndex, 0, reorderedItem)
+
+    setPrompts(nextPrompts)
+    await persistPrompts(nextPrompts)
   }
 
   if (loading) {
@@ -262,38 +297,59 @@ function App() {
           </button>
         </form>
 
-        <ul className="prompt-list">
-          {prompts.length === 0 && <li className="empty">尚未建立提示詞，先新增幾個吧。</li>}
-          {prompts.map((prompt, index) => (
-            <li key={`${prompt}-${index}`}>
-              {editingIndex === index ? (
-                <>
-                  <textarea value={editingValue} onChange={(event) => setEditingValue(event.target.value)} />
-                  <div className="button-row">
-                    <button type="button" className="primary" onClick={handleSaveEdit}>
-                      儲存
-                    </button>
-                    <button type="button" onClick={handleCancelEdit}>
-                      取消
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p>{prompt}</p>
-                  <div className="button-row">
-                    <button type="button" onClick={() => handleStartEdit(index, prompt)}>
-                      編輯
-                    </button>
-                    <button type="button" className="danger" onClick={() => handleDeletePrompt(index)}>
-                      刪除
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="prompt-list">
+            {(provided) => (
+              <ul className="prompt-list" {...provided.droppableProps} ref={provided.innerRef}>
+                {prompts.length === 0 && <li className="empty">尚未建立提示詞，先新增幾個吧。</li>}
+                {prompts.map((prompt, index) => (
+                  <Draggable key={prompt.id} draggableId={prompt.id} index={index}>
+                    {(provided, snapshot) => (
+                      <li
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        className={`draggable-item ${snapshot.isDragging ? 'dragging' : ''}`}
+                        style={provided.draggableProps.style}
+                      >
+                        {editingIndex === index ? (
+                          <>
+                            <textarea value={editingValue} onChange={(event) => setEditingValue(event.target.value)} />
+                            <div className="button-row">
+                              <button type="button" className="primary" onClick={handleSaveEdit}>
+                                儲存
+                              </button>
+                              <button type="button" onClick={handleCancelEdit}>
+                                取消
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="drag-handle" {...provided.dragHandleProps}>
+                              <span className="drag-icon">⋮⋮</span>
+                            </div>
+                            <div className="prompt-content">
+                              <p>{prompt.text}</p>
+                              <div className="button-row">
+                                <button type="button" onClick={() => handleStartEdit(index, prompt.text)}>
+                                  編輯
+                                </button>
+                                <button type="button" className="danger" onClick={() => handleDeletePrompt(index)}>
+                                  刪除
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </li>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </ul>
+            )}
+          </Droppable>
+        </DragDropContext>
       </section>
 
       <footer>
